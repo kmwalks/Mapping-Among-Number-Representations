@@ -1,0 +1,623 @@
+# Install and Load Libraries 
+install.packages("car")
+install.packages("sm")
+install.packages("ggplot2") # for general plots
+install.packages("MASS") # for polr package
+install.packages("generalhoslem") # for testing model fit (lipsitz test and two others)
+install.packages("qwraps2") # for summary_table use
+install.packages("quantreg") # testing quantile plots (geom_quantile) and quantile regressions
+install.packages ("olsrr") #for testing normality
+install.packages("plyr") #for count and other cool things
+install.packages("psych") #obtain descriptive statistics
+install.packages("colorspace") # for fixing colors in plots
+install.packages("stargazer") # for pretty regression output tables
+install.packages("MASS") # for polr package
+install.packages("generalhoslem") # for testing model fit 
+install.packages("qwraps2") # for summary_table use
+install.packages("quantreg") # testing quantile plots (geom_quantile) and quantile regressions
+install.packages("sure") # package for calculating residuals for ordinal logistic regression (https://journal.r-project.org/archive/2018/RJ-2018-004/RJ-2018-004.pdf)
+install.packages("mediation") # package for testing mediation effects
+install.packages("gridExtra") 
+install.packages(“coin”)
+install.packages("dplyr") #reshaping data frames 
+install.packages("tidyr")
+install.packages("lme4")
+install.packages("plotrix")
+install.packages("VGAM") #for tobit model 
+
+library(car)
+library(sm)
+library(ggplot2) 
+library(MASS) 
+library(generalhoslem) 
+library(qwraps2) 
+library(quantreg) 
+library(olsrr)
+library(plyr)
+library(psych)
+library(colorspace) 
+library(stargazer)
+library(MASS)
+library(generalhoslem) 
+library(qwraps2) 
+library(quantreg) 
+library(sure) 
+library(mediation) 
+library(gridExtra)
+library(coin)
+library(dplyr)
+library(tidyr)
+library(lme4)
+library("plotrix")
+library(VGAM)
+
+# Check and Set Working Directory
+      setwd("~/Desktop")
+      getwd()
+      
+# Import Data 
+      Map <- read.csv("Mapping_Coding_KW_200401.csv", na.strings = "N/A")
+      View(Map)
+  
+ # Participants
+
+      Map_EE <- subset(Map, Map$Group_4cat == "English Early" & (Map$Age_Rounded>=5 & Map$Age_Rounded<10 | is.na(Map$Age_Rounded)))
+      View(Map_EE) #50 total English Early kids within our age range (5-9)
+
+      Total_Inc_Study <- subset(Map_EE, Map_EE$Including.in.Study == "Yes" & Map_EE$Mapping_Include. == "Yes")
+      View(Total_Inc_Study)# 47 total kids included in study
+
+      Total_Not_Inc_Study <- subset(Map_EE, Map_EE$Including.in.Study == "No" | Map_EE$Including.in.Study== "")
+      nrow(Total_Not_Inc_Study)# 3 total kids not included in study
+
+      Total_Blank_NA <- subset(Map_EE, Map_EE$Including.in.Study == "" | is.na(Map_EE$Including.in.Study))
+      nrow(Total_Blank_NA) # 0 blanks or N/As
+
+      Tested_Not_Inc <- subset(Map_EE, Map_EE$Including.in.Study != "Yes" & Map_EE$Date.Tested != "")
+      nrow(Tested_Not_Inc)
+      # 0 kids not included in study that were tested. 
+      
+       # Find observations with missing Age and SES values
+            which(is.na(Total_Inc_Study$Age_Rounded)) # 0 observations missing Age value
+            Missing_Age <- Total_Inc_Study[which(is.na(Total_Inc_Study$Age_Rounded)),3]
+            nrow(Missing_Age)
+
+            which(is.na(Total_Inc_Study$SES)) # 0 observations missing SES value
+            Missing_SES <- Total_Inc_Study[which(is.na(Total_Inc_Study$SES)),3]
+            nrow(Missing_SES)
+
+            Incorrect_SES <- subset(Total_Inc_Study, Total_Inc_Study$SES < 3  & Total_Inc_Study$SES < 66 | Total_Inc_Study$SES == "")
+            nrow(Incorrect_SES) #No observations of SES < 3 or > 66
+                   
+        # SEX 
+        sum(Total_Inc_Study$M.F=='Female') # 24
+        sum(Total_Inc_Study$M.F=='Male') # 23
+        sum(Total_Inc_Study$M.F=='N/A') # 0
+
+        # RACE & ETHNICITY DESCRIPTIVE STATISTICS, grouped Unsure and N/As together
+        Total_Inc_Study %>% count(Race) #40 white, 3 mixed, 1 american indian/alaska native, 1 other, 1 unsure, 1 N/A
+        Total_Inc_Study %>% count(Ethnicity) #36 not hispanic or latino, 4 hispanic or latino, 6 N/A, 1 unsure
+
+        # AGE DESCRIPTIVE STATISTICS    
+        min(Total_Inc_Study$Age_Rounded, na.rm=TRUE) # 5.1
+        max(Total_Inc_Study$Age_Rounded, na.rm=TRUE) # 9.7
+        median(Total_Inc_Study$Age_Rounded, na.rm=TRUE) # 6.7
+        mean(Total_Inc_Study$Age_Rounded, na.rm=TRUE) # 6.917021
+        sd(Total_Inc_Study$Age_Rounded, na.rm=TRUE) # 1.304394
+        range(Total_Inc_Study$Age_Rounded, na.rm=TRUE) # 5.1 - 9.7
+        ggplot(Total_Inc_Study, aes(x=Group_4cat, y=Age_Rounded)) + geom_violin()
+
+        # SES DESCRIPTIVE STATISTICS
+        min(Total_Inc_Study$SES, na.rm=TRUE) # 17
+        max(Total_Inc_Study$SES, na.rm=TRUE) # 66
+        median(Total_Inc_Study$SES, na.rm=TRUE) # 61
+        mean(Total_Inc_Study$SES, na.rm=TRUE) # 56.20213
+        sd(Total_Inc_Study$SES, na.rm=TRUE) # 12.37005
+        range(Total_Inc_Study$SES, na.rm=TRUE) # 17 - 66
+        ggplot(Total_Inc_Study, aes(x=Group_4cat, y=SES)) + geom_violin()
+            # Skewness and Kurtosis for SES 
+                  describe(Total_Inc_Study$SES) #using Psych package, skewness -1.99 & SE 1.8
+                  qplot(Total_Inc_Study$SES, geom = 'histogram', binwidth = 2) + xlab('SES') #highly skewed 
+
+#Data Analysis
+        Map_HBE <- subset(Map_EE, Map_EE$Including.in.Study == "Yes" & Map_EE$Mapping_Include. == "Yes") #RENAMING Total_Inc_Study DATA FRAME for coding ease
+        View(Map_HBE) #HBE means "hearing born English" 
+        
+        #Overall Mapping Performance
+        wilcox.test(Map_HBE$AvgCorrect_Total, mu = .25, alternative = "greater") #overall mapping performance compared to chance, p-value = 1.129e-09
+        
+        All <- Map_HBE$SumCorrectTotal_All
+        Ch <- 13 #51/4 (rounded up, at chance score)
+        Var_Ch <- length(which(All>= Ch)) #number of observations equal to or above chance
+        N <- nrow(Map_HBE) #number of total observations
+        (Var_Ch/N)*100 #100% at or above chance
+        
+        All <- Map_HBE$SumCorrectTotal_All
+        C_All <- 51 #ceiling performance 
+        Var_All <- length(which(All>= C_All)) #number of observations equal to ceiling 
+        N <- nrow(Map_HBE) #number of total observations
+        (Var_All/N)*100 #19% at ceiling
+        
+        #Mixed Effects Logistic Regression
+              #Want wide → long, use tidyr's pivot_longer() 
+              #resource https://cran.r-project.org/web/packages/tidyr/vignettes/pivot.html
+                HBE_long <- pivot_longer(data = Map_HBE, cols=c(ends_with("Answer")), names_to = c("Type"), values_to = "Quantity")
+                View(HBE_long) 
+                HBE_long2 <- pivot_longer(data = Map_HBE, cols=c(ends_with("Correct.")), names_to = c("Type2"), values_to = "Correct")
+                View(HBE_long2)
+                HBE_longest <- cbind(HBE_long, HBE_long2)
+                View(HBE_longest)
+                HBE_short <- HBE_longest[,!grepl("^Item",names(HBE_longest))] # delete columns that contain “item” 
+     		View(HBE_short)
+                which(colnames(HBE_short)=="Child_LanguageTested") #19th column
+                which(colnames(HBE_short)=="Quantity") #73rd column, WANT TO KEEP THIS COLUMN 
+                HBE_short <- HBE_short[, -c(19:72)] #removes unnecessary columns
+                View(HBE_short)
+                which(colnames(HBE_short)=="Comments.1") #20
+                which(colnames(HBE_short)=="Sum_Numeral.Word_Word.Numeral.1") #90
+                HBE_short <- HBE_short[, -c(20:90)] #removes unnecessary columns
+                View(HBE_short)
+
+                # From Type column, create a new column (Map_Pair)
+                #Create new column for which IF HBE_short$Type contains “NW” or “WN”, assign value “Numeral-Word”
+                Map_Pair <- c()
+                for(i in 1:2397)
+                     Map_Pair[i] <- ifelse(grepl("NW", HBE_short$Type[i]), "Numeral-Word", ifelse(grepl("WN", HBE_short$Type[i]), "Numeral-Word", ifelse(grepl("QN", HBE_short$Type[i]), "Quantity-Numeral", ifelse(grepl("NQ", HBE_short$Type[i]), "Quantity-Numeral", ifelse(grepl("QW", HBE_short$Type[i]), "Quantity-Word", ifelse(grepl("WQ", HBE_short$Type[i]), "Quantity-Word","bananas"))))))
+                HBE_short <- cbind(HBE_short, Map_Pair)
+                View(HBE_short)
+
+                #From Quantity column, create Small, Med, Large
+                # resource https://stackoverflow.com/questions/15016723/how-to-add-column-into-a-dataframe-based-on-condition 
+                Set_Size <- c()
+                Set_Size <- case_when(HBE_short$Quantity <= 3 ~ 'Small',
+                                       HBE_short$Quantity > 3 & HBE_short$Quantity<= 5 ~ 'Medium',
+                                       HBE_short$Quantity > 5 ~ 'Large')
+                HBE_short <- cbind(HBE_short,Set_Size)
+                View(HBE_short)
+     
+     #Mixed Effects Logistic Regression. Resource: https://stats.idre.ucla.edu/r/dae/mixed-effects-logistic-regression/
+       REG_Overall <- glmer(Correct ~ Age_Rounded + SES + Set_Size + Map_Pair + (1 | SUBJECT_ID), data = HBE_short, family = binomial, control = glmerControl(optimizer ="bobyqa"), nAGQ = 10)
+       REG_Overall #AIC 1128.1942, deviance 1112.1942
+       #Obtaining Descriptives of Model
+       se <- sqrt(diag(vcov(REG_Overall)))
+       (odds <- cbind(Est = fixef(REG_Overall), LL = fixef(REG_Overall) - 1.96 * se, UL = fixef(REG_Overall) + 1.96 * se))
+       exp(odds) #provides odds ratios
+       REG_Compare <- glmer(Correct ~ 1 | SUBJECT_ID, data = HBE_short, family = binomial, control = glmerControl(optimizer ="bobyqa"), nAGQ = 10)
+       REG_Compare #AIC 1260.2973, deviance 1256.2973
+       
+#Age Group Decision
+      AGEGRP <- Map_HBE %>% mutate(AGEGRP = case_when(Map_HBE$Age_Rounded >= 5  & Map_HBE$Age_Rounded < 6 ~ '5', Map_HBE$Age_Rounded >= 6  & Map_HBE$Age_Rounded < 7 ~ '6', Map_HBE$Age_Rounded >= 7  & Map_HBE$Age_Rounded < 8 ~ '7', Map_HBE$Age_Rounded >= 8  & Map_HBE$Age_Rounded < 9 ~ '8', Map_HBE$Age_Rounded >= 9  & Map_HBE$Age_Rounded < 10 ~ '9'))
+      Map_HBE2 <- cbind(Map_HBE, AGEGRP)
+      View(Map_HBE2)
+      YO5 <- subset(Map_HBE2, Map_HBE2$AGEGRP =="5")
+      YO6 <- subset(Map_HBE2, Map_HBE2$AGEGRP =="6")
+      YO7 <- subset(Map_HBE2, Map_HBE2$AGEGRP =="7")
+      YO8 <- subset(Map_HBE2, Map_HBE2$AGEGRP =="8")
+      YO9 <- subset(Map_HBE2, Map_HBE2$AGEGRP =="9")
+      #Below are proportions! 
+      t.test(YO5$AvgCorrect_Total, YO6$AvgCorrect_Total, paired = FALSE, alternative = "two.sided")  # 5 vs 6 not Different, t = -1.9814, df = 19.599, p-value = 0.06175
+      t.test(YO5$AvgCorrect_Total, YO7$AvgCorrect_Total, paired = FALSE, alternative = "two.sided")  #5 vs 7 SIG DIFFERENT, t = -3.6593, df = 22.555, p-value = 0.001337
+      t.test(YO5$AvgCorrect_Total, YO8$AvgCorrect_Total, paired = FALSE, alternative = "two.sided")  #5 vs 8 SIG DIFFERENT, t = -5.4696, df = 15.766, p-value = 5.417e-05
+      t.test(YO5$AvgCorrect_Total, YO9$AvgCorrect_Total, paired = FALSE, alternative = "two.sided")  #5 vs 9 SIG DIFFERENT, t = -5.6128, df = 17.174, p-value = 2.99e-05
+      t.test(YO6$AvgCorrect_Total, YO7$AvgCorrect_Total, paired = FALSE, alternative = "two.sided")  #6 vs 7 not Different, t = -1.2263, df = 16.815, p-value = 0.237
+      t.test(YO6$AvgCorrect_Total, YO8$AvgCorrect_Total, paired = FALSE, alternative = "two.sided") #6 vs 8 not Different, t = -2.0488, df = 9.8067, p-value = 0.06819
+      t.test(YO6$AvgCorrect_Total, YO9$AvgCorrect_Total, paired = FALSE, alternative = "two.sided") #6 vs 9 SIG DIFFERENT, t = -2.2875, df = 10.692, p-value = 0.04361
+      t.test(YO7$AvgCorrect_Total, YO8$AvgCorrect_Total, paired = FALSE, alternative = "two.sided") #7 vs 8 not Different, t = -0.69919, df = 10.37, p-value = 0.4998 
+      t.test(YO7$AvgCorrect_Total, YO9$AvgCorrect_Total, paired = FALSE, alternative = "two.sided") #7 vs 9 not Different, t = -1.041, df = 11.649, p-value = 0.319
+      t.test(YO8$AvgCorrect_Total, YO9$AvgCorrect_Total, paired = FALSE, alternative = "two.sided") #8 vs 9 not Different, t = -0.79799, df = 7.3601, p-value = 0.4499
+ 
+#SEPARATING BY AGE GROUPS
+	Map_HBE$Age3cat <- case_when(Map_HBE$Age_Rounded < 6 ~ '5-year-olds', Map_HBE$Age_Rounded >= 6 & Map_HBE$Age_Rounded< 7 ~ '6-year-olds', Map_HBE$Age_Rounded >= 7 ~ '7 to 9-year-olds')
+	View(Map_HBE)
+	
+	#Setting up 3 age group data frames 
+	Map_5only <- subset(Map_HBE, Map_HBE$Age3cat == "5-year-olds")
+	View(Map_5only)
+	Map_6only <- subset(Map_HBE, Map_HBE$Age3cat == "6-year-olds")
+	View(Map_6only)
+	Map_79only <- subset(Map_HBE, Map_HBE$Age3cat == "7 to 9-year-olds")
+	View(Map_79only)
+
+#Average Correct Total by 3 Age Grps
+	dodge <- position_dodge(width = 0.7)
+	map.n <- function(x){return(c(y = median(x)*1.05, label = length(x))) }
+	mean.n <- function(x){return(c(y= median(x)*0.97, label = round(mean(x), 2)))}  
+	Age3cat_BV <- ggplot(Map_HBE, aes(x=Age3cat, y=SumCorrectTotal_All, fill=Age3cat)) + geom_violin (position = dodge)+ geom_boxplot(width=0.2, position = dodge) + labs (x= "Age Groups", y = "Average Correct (out of 51)") + scale_fill_grey(start = 0.5, end = 0.9) + stat_summary(fun.data = mean.n, geom = "text", fun = median) + stat_summary(fun.data = mean.n, geom= "text", fun=mean, color= "black") + theme(legend.position = "none", axis.title.x = element_text(color="black", size=14, family = "Calibri"), axis.text.x = element_text(color="black", size=12, family = "Calibri"), axis.title.y = element_text(color="black", size=14, family = "Calibri"), axis.text.y = element_text(color="black", size=12, family = "Calibri"))
+	Age3cat_BV
+
+#Scatterplots of Proportion Corrects for Mapping Pairs
+	  qn <- ggplot(Map_HBE, aes(x=Age_Rounded, y=QN)) + geom_point() + geom_smooth(method="loess", se = FALSE) + labs(x="Age (Years)", y="Proportion Correct", title = "(a) Quantity-Numeral") + theme(text = element_text(size=16, family="Calibri")) + coord_cartesian(xlim = c(5, 10), ylim= c(0.4,1)) + scale_y_continuous(breaks=c(0.5, 0.6, 0.7, 0.8, 0.9, 1)) + scale_x_continuous(breaks=c(5, 6, 7, 8, 9))
+	  qw <- ggplot(Map_HBE, aes(x=Age_Rounded, y=QW)) + geom_point() + geom_smooth(method="loess", se = FALSE) + labs(x="Age (Years)", y="Proportion Correct", title = "(b) Quantity-Word") + theme(text = element_text(size=16, family="Calibri")) + coord_cartesian(xlim = c(5, 10), ylim= c(0.4,1)) + scale_y_continuous(breaks=c(0.5, 0.6, 0.7, 0.8, 0.9, 1)) + scale_x_continuous(breaks=c(5, 6, 7, 8, 9))    
+	  nw <- ggplot(Map_HBE, aes(x=Age_Rounded, y=NW)) + geom_point() + geom_smooth(method="loess", se = FALSE) + labs(x="Age (Years)", y="Proportion Correct", title = "(c) Numeral-Word") + theme(text = element_text(size=16, family="Calibri")) + coord_cartesian(xlim = c(5, 10), ylim= c(0.4,1)) + scale_y_continuous(breaks=c(0.5, 0.6, 0.7, 0.8, 0.9, 1)) + scale_x_continuous(breaks=c(5, 6, 7, 8, 9))
+	  grid.arrange(qn,qw,nw,ncol = 3)
+ 
+#Setting up data frame for mapping pair figure
+	Age3cat <- Map_HBE$Age3cat
+	Age_Rounded <- Map_HBE$Age_Rounded
+	QW <- Map_HBE$AvgCorrect_Quantity.Word_Word.Quantity
+	NW <- Map_HBE$AvgCorrect_Numeral.Word_Word.Numeral
+	QN <- Map_HBE$AvgCorrect_Quantity.Numeral_Numeral.Quantity
+	Map_HBE2 <- data.frame(Age3cat, QW, NW,QN)
+	Map_HBE2 <- melt(Map_HBE2, id.vars='Age3cat')
+	names(Map_HBE2)[names(Map_HBE2) == "variable"] <- "Map Pair"
+	names(Map_HBE2)[names(Map_HBE2) == "value"] <- "mean"
+	View(Map_HBE2)
+
+#Boxplot of Mapping Pair Proportion Correct Performance by 3 Age Groups
+	Map_BV <- ggplot(Map_HBE2, aes(`Map Pair`, mean, fill=Age3cat)) + geom_boxplot(width=.6, position = dodge) + scale_fill_manual(values=c("grey36", "grey69", "grey80"), labels = c("5-year-olds", "6-year-olds", "7 to 9-year-olds")) + labs(y="Proportion Correct") + scale_y_continuous (breaks=c(0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("QN","QW","NW"), expand = c(.2,0),labels = c("Quantity-Numeral", "Quantity-Word", "Numeral-Word")) + theme_bw() + theme(legend.position="top", legend.title = element_blank(), axis.title.x=element_blank(), panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=20, family="Calibri")) 
+	Map_BV
+
+#Proportion Correct table of Map Pairs and Age Grps and Checking compared to chance (0.25)
+	#Quantity-Numeral
+		mean(Map_5only$AvgCorrect_Quantity.Numeral_Numeral.Quantity)
+		wilcox.test(Map_5only$AvgCorrect_Quantity.Numeral_Numeral.Quantity, mu = .25, alternative = "greater") 
+		mean(Map_6only$AvgCorrect_Quantity.Numeral_Numeral.Quantity)
+		wilcox.test(Map_6only$AvgCorrect_Quantity.Numeral_Numeral.Quantity, mu = .25, alternative = "greater") 
+		mean(Map_79only$AvgCorrect_Quantity.Numeral_Numeral.Quantity)
+		wilcox.test(Map_79only$AvgCorrect_Quantity.Numeral_Numeral.Quantity, mu = .25, alternative = "greater") 
+	#Quantity-Word
+		mean(Map_5only$AvgCorrect_Quantity.Word_Word.Quantity)
+		wilcox.test(Map_5only$AvgCorrect_Quantity.Word_Word.Quantity, mu = .25, alternative = "greater") 
+		mean(Map_6only$AvgCorrect_Quantity.Word_Word.Quantity)
+		wilcox.test(Map_6only$AvgCorrect_Quantity.Word_Word.Quantity, mu = .25, alternative = "greater") 
+		mean(Map_79only$AvgCorrect_Quantity.Word_Word.Quantity)
+		wilcox.test(Map_79only$AvgCorrect_Quantity.Word_Word.Quantity, mu = .25, alternative = "greater") 
+	#Numeral-Word
+		mean(Map_5only$AvgCorrect_Numeral.Word_Word.Numeral)
+		wilcox.test(Map_5only$AvgCorrect_Numeral.Word_Word.Numeral, mu = .25, alternative = "greater") 
+		mean(Map_6only$AvgCorrect_Numeral.Word_Word.Numeral)
+		wilcox.test(Map_6only$AvgCorrect_Numeral.Word_Word.Numeral, mu = .25, alternative = "greater") 
+		mean(Map_79only$AvgCorrect_Numeral.Word_Word.Numeral)
+		wilcox.test(Map_79only$AvgCorrect_Numeral.Word_Word.Numeral, mu = .25, alternative = "greater")
+ 
+
+#Set size comparisons by mapping pairs and age
+	#Creating the DFs
+	which(colnames(Map_HBE)=="AvgCorrect_Sm_QW") #312th column 
+	which(colnames(Map_HBE)=="AvgCorrect_Lrg_WN") #320th column
+	HBE_long2 <- pivot_longer(Map_HBE, cols = 312:320, values_to = "Pair_Size")
+	View(HBE_long2)
+	which(colnames(HBE_long2)=="Item1_QN_Answer") #21
+	which(colnames(HBE_long2)=="Sum_Numeral.Word_Word.Numeral") #317
+	HBE_short2 <- HBE_long2[,-c(21:317)]
+	View(HBE_short2)
+	#Add Set Size Columns
+	HBE_short2 <-  mutate(HBE_short2, SetSize = case_when(grepl("Sm", HBE_short2$name) ~ "Small", grepl("Med", HBE_short2$name) ~"Medium", grepl("Lrg", HBE_short2$name) ~"Large"))
+	HBE_short2$Set_Size <- as.factor(factor(as.character(HBE_short2$SetSize), levels=c("Small", "Medium", "Large"), exclude=""))
+	HBE_short2$Set_Size_refM <- as.factor(factor(as.character(HBE_short2$SetSize), levels=c("Medium", "Small", "Large"), exclude=""))
+	HBE_short2$Set_Size_refL <- as.factor(factor(as.character(HBE_short2$SetSize), levels=c("Large","Medium", "Small"), exclude=""))
+	#Add Map Pair Columns
+	HBE_short2 <- mutate(HBE_short2, MapPair = case_when(grepl("QW", HBE_short2$name) ~ "Quantity-Word", grepl("QN", HBE_short2$name) ~"Quantity-Numeral", grepl("WN", HBE_short2$name) ~"Numeral-Word"))
+	HBE_short2$MapPair <- as.factor(factor(as.character(HBE_short2$MapPair), levels=c("Numeral-Word","Quantity-Numeral", "Quantity-Word"), exclude=""))
+	HBE_short2$MapPair_refQN <- as.factor(factor(as.character(HBE_short2$MapPair), levels=c("Quantity-Numeral", "Quantity-Word","Numeral-Word"), exclude=""))
+	HBE_short2$MapPair_refQW <- as.factor(factor(as.character(HBE_short2$MapPair), levels=c("Quantity-Word","Numeral-Word","Quantity-Numeral"), exclude=""))
+	View(HBE_short2)
+	
+	HBE_short2$AgeGrp <- ifelse(HBE_short2$Age_Rounded < 6, "5-year-olds", "6-year-olds")
+	Map5 <- subset(HBE_short2, HBE_short2$AgeGrp == "5-year-olds")
+	Map6 <- subset(HBE_short2, HBE_short2$AgeGrp == "6-year-olds")
+	#Create 2 DFs for 5 and 6-year-olds and 7 to 9-year-olds
+	HBE_short2$AgeGrp_5v7 <- ifelse(HBE_short2$Age_Rounded < 7, "5 and 6-year-olds", "7 to 9-year-olds")
+	View(HBE_short2)
+	HBE_short2_5 <- subset(HBE_short2, AgeGrp_5v7 == "5 and 6-year-olds")
+	View(HBE_short2_5) # 5 and 6 year olds
+	HBE_short2_7 <- subset(HBE_short2, AgeGrp_5v7 == "7 to 9-year-olds")
+	View(HBE_short2_7) #7-9 year olds 
+	
+	#Creating data frames for 2 age groups by mapping pairs 
+	qw_5 <- subset (HBE_short2_5, HBE_short2_5$MapPair == "Quantity-Word")
+	View(qw_5)
+	qn_5 <- subset (HBE_short2_5, HBE_short2_5$MapPair == "Quantity-Numeral")
+	View(qn_5)
+	nw_5 <- subset (HBE_short2_5, HBE_short2_5$MapPair == "Numeral-Word")
+	View(nw_5)
+	qw_7 <- subset (HBE_short2_7, HBE_short2_7$MapPair == "Quantity-Word")
+	View(qw_7)
+	qn_7 <- subset (HBE_short2_7, HBE_short2_7$MapPair == "Quantity-Numeral")
+	View(qn_7)
+	nw_7 <- subset (HBE_short2_7, HBE_short2_7$MapPair == "Numeral-Word")
+	View(nw_7)
+	
+	#Creating data frames for 5 and 6 year olds (separately)
+	qn_5_only <- subset (qn_5, qn_5$Age_Rounded < 6)
+	View(qn_5_only)
+	qn_6_only <- subset (qn_5, qn_5$Age_Rounded >=6)
+	View(qn_6_only)
+	qw_5_only <- subset (qw_5, qw_5$Age_Rounded < 6)
+	View(qw_5_only)
+	qw_6_only <- subset (qw_5, qw_5$Age_Rounded >=6)
+	View(qw_6_only)
+	nw_5_only <- subset (nw_5, nw_5$Age_Rounded < 6)
+	View(nw_5_only)
+	nw_6_only <- subset (nw_5, nw_5$Age_Rounded >=6)
+	View(nw_6_only)
+
+	#Boxplot of 2 age groups & 3 mapping pairs (proportion correct)
+	MapPair <- HBE_short2$MapPair
+	Prop <- HBE_short2$Pair_Size
+	AgeGrp <- HBE_short2$AgeGrp
+	dodge <- position_dodge(width = 0.5)
+	Box_Prop <- ggplot(HBE_short2, aes(MapPair, Prop, fill=AgeGrp)) + geom_boxplot(width=0.2, position = dodge) + scale_fill_manual(values=c("grey87", "grey51"), labels = c("5 and 6-year-olds (n=25)", "7 to 9-year-olds (n=22)")) + labs( y="Proportion Correct") + scale_y_continuous (breaks=c(0.0, 0.2, 0.4,0.6,0.8,1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("Quantity-Numeral","Quantity-Word","Numeral-Word"), expand = c(.2,0),labels = c("Quantity-Numeral", "Quantity-Word", "Numeral-Word")) + theme_bw() + theme(legend.position="top", legend.title = element_blank(), axis.title.x=element_blank(), panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=20, family="Calibri")) 
+	Box_Prop
+	
+	#Boxplot 5 vs 6 year olds, map pairs, proportion correct
+	dodge <- position_dodge(width = 0.5)
+	ALL_56 <- ggplot(HBE_short2_5, aes(MapPair, Pair_Size, fill=AgeGrp)) + geom_boxplot(width=0.2, position = dodge) + scale_fill_manual(values=c("grey87", "grey51"), labels = c("5-year-olds (n=15)", "6-year-olds (n=10)")) + labs(y="Proportion Correct") + scale_y_continuous (breaks=c(0.0, 0.2, 0.4,0.6,0.8,1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("Quantity-Numeral","Quantity-Word","Numeral-Word"), expand = c(.2,0),labels = c("Quantity-Numeral", "Quantity-Word", "Numeral-Word")) + theme_bw() + theme(legend.position="top", legend.title = element_blank(), axis.title.x=element_blank(), panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=16, family="Times New Roman")) 
+	ALL_56
+
+	#Boxplots by Map Pairs & Set Sizes#
+	library(grid)
+	dodge <- position_dodge(width = 0.5)
+	qn_5_only_box <- ggplot(qn_5_only, aes(Set_Size,Pair_Size)) + geom_boxplot(width=0.2, position = dodge) + labs(x="Quantity-Numeral", y="Proportion Correct", title="a") + scale_y_continuous (breaks=c(0.0, 0.2, 0.4,0.6,0.8,1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("Small","Medium","Large"), expand = c(.2,0),labels = c("Small", "Medium", "Large")) + theme_bw() + theme(legend.position="top", panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=12, family="Calibri")) 
+	qn_5_only_box
+	qn_6_only_box <- ggplot(qn_6_only, aes(Set_Size,Pair_Size)) + geom_boxplot(width=0.2, position = dodge) + labs(x="Quantity-Numeral", y="Proportion Correct", title="d") + scale_y_continuous (breaks=c(0.0, 0.2, 0.4,0.6,0.8,1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("Small","Medium","Large"), expand = c(.2,0),labels = c("Small", "Medium", "Large")) + theme_bw() + theme(legend.position="top", panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=12, family="Calibri")) 
+	qn_6_only_box	
+	qn_79_box <- ggplot(qn_7, aes(Set_Size,Pair_Size)) + geom_boxplot(width=0.2, position = dodge) +  labs(x="Quantity-Numeral", y="Proportion Correct", title="g") + scale_y_continuous (breaks=c(0.0, 0.2, 0.4,0.6,0.8,1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("Small","Medium","Large"), expand = c(.2,0),labels = c("Small", "Medium", "Large")) + theme_bw() + theme(legend.position="top", panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=12, family="Calibri")) 
+	qn_79_box
+
+	qw_5_only_box <- ggplot(qw_5_only, aes(Set_Size,Pair_Size)) + geom_boxplot(width=0.2, position = dodge) + labs(x="Quantity-Word", y="Proportion Correct", title="b") + scale_y_continuous (breaks=c(0.0, 0.2, 0.4,0.6,0.8,1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("Small","Medium","Large"), expand = c(.2,0),labels = c("Small", "Medium", "Large")) + theme_bw() + theme(legend.position="top", panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=12, family="Calibri")) 
+	qw_5_only_box
+	qw_6_only_box <- ggplot(qw_6_only, aes(Set_Size,Pair_Size)) + geom_boxplot(width=0.2, position = dodge) + labs(x="Quantity-Word", y="Proportion Correct", title="e") + scale_y_continuous (breaks=c(0.0, 0.2, 0.4,0.6,0.8,1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("Small","Medium","Large"), expand = c(.2,0),labels = c("Small", "Medium", "Large")) + theme_bw() + theme(legend.position="top", panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=12, family="Calibri")) 
+	qw_6_only_box
+	qw_79_box <- ggplot(qw_7, aes(Set_Size,Pair_Size)) + geom_boxplot(width=0.2, position = dodge) + labs(x="Quantity-Word", y="Proportion Correct", title="h") + scale_y_continuous (breaks=c(0.0, 0.2, 0.4,0.6,0.8,1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("Small","Medium","Large"), expand = c(.2,0),labels = c("Small", "Medium", "Large")) + theme_bw() + theme(legend.position="top", panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=12, family="Calibri")) 
+	qw_79_box
+
+	nw_5_only_box <- ggplot(nw_5_only, aes(Set_Size,Pair_Size)) + geom_boxplot(width=0.2, position = dodge) + labs(x="Numeral-Word", y="Proportion Correct", title="c") + scale_y_continuous (breaks=c(0.0, 0.2, 0.4,0.6,0.8,1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("Small","Medium","Large"), expand = c(.2,0),labels = c("Small", "Medium", "Large")) + theme_bw() + theme(legend.position="top", panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=12, family="Calibri")) 
+	nw_5_only_box
+	nw_6_only_box <- ggplot(nw_6_only, aes(Set_Size,Pair_Size)) + geom_boxplot(width=0.2, position = dodge) + labs(x="Numeral-Word", y="Proportion Correct", title="f") + scale_y_continuous (breaks=c(0.0, 0.2, 0.4,0.6,0.8,1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("Small","Medium","Large"), expand = c(.2,0),labels = c("Small", "Medium", "Large")) + theme_bw() + theme(legend.position="top", panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=12, family="Calibri")) 
+	nw_6_only_box
+	nw_79_box <- ggplot(nw_7, aes(Set_Size,Pair_Size)) + geom_boxplot(width=0.2, position = dodge) + labs(x="Numeral-Word", y="Proportion Correct", title="i") + scale_y_continuous (breaks=c(0.0, 0.2, 0.4,0.6,0.8,1.0), limits = c(0,1), expand = c(0,0)) + scale_x_discrete(limits=c("Small","Medium","Large"), expand = c(.2,0),labels = c("Small", "Medium", "Large")) + theme_bw() + theme(legend.position="top", panel.border = element_blank(),panel.grid.minor.y = element_blank(), panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), axis.line = element_line(colour = "black"), text = element_text(size=12, family="Calibri")) 
+	nw_79_box
+	
+#Creating figures for Map Pair by Set Size Performance for three age groups 
+	yo_5 <- grid.arrange(qn_5_only_box,qw_5_only_box,nw_5_only_box, ncol = 3, top=textGrob("5-year-olds (n=15)", gp=gpar(fontsize=14,fontface = "bold",fontfamily="Calibri")))
+	yo_6 <- grid.arrange(qn_6_only_box,qw_6_only_box,nw_6_only_box, ncol = 3, top=textGrob("6-year-olds (n=10)", gp=gpar(fontsize=14,fontface = "bold",fontfamily="Calibri")))
+	yo_7 <- grid.arrange(qn_79_box,qw_79_box,nw_79_box, ncol = 3, top=textGrob("7 to 9-year-olds (n=22)", gp=gpar(fontsize=14,fontface = "bold",fontfamily="Calibri")))
+#Combining above figures into one 
+	grid.arrange(yo_5,yo_6,yo_7,ncol=1) #5, 6, and 7-9 YO figures of mapping pairs by set sizes 
+		
+#Tobit Models, resource: https://stats.idre.ucla.edu/r/dae/tobit-models/
+#5-year-olds only
+	summary(Map5_t <- vglm(Pair_Size ~  SES + MapPair, tobit(Upper = 1), data = Map5))
+	summary(Map5_t_ref <- vglm(Pair_Size ~ SES + MapPair_refQW, tobit(Upper = 1), data = Map5))	
+	#Checking model fit
+	Map5$yhat <- fitted(Map5_t)[,1]
+	Map5$rr <- resid(Map5_t, type = "response")
+	Map5$rp <- resid(Map5_t, type = "pearson")[,1]
+	par(mfcol = c(2, 3))
+	with(Map5, {
+	    plot(yhat, rr, main = "Fitted vs Residuals")
+	    qqnorm(rr)
+	    plot(yhat, rp, main = "Fitted vs Pearson Residuals")
+	    qqnorm(rp)
+	    plot(Pair_Size, rp, main = "Actual vs Pearson Residuals")
+	    plot(Pair_Size, yhat, main = "Actual vs Fitted")
+	})
+	r <- with(Map5, cor(yhat, Pair_Size)) 
+	r 
+	r^2 #0.1455489
+	#5 YO only, Looking at Map Pairs
+	summary(nw5_t <- vglm(Pair_Size ~ SES + Set_Size, tobit(Lower=0, Upper = 1), data = nw_5_only)) 
+	summary(nw5_t_ref <- vglm(Pair_Size ~ SES + Set_Size_refM, tobit(Lower=0, Upper = 1), data = nw_5_only)) 
+	#Checking model fit for 5 yo NW
+	nw_5_only$yhat <- fitted(nw5_t)[,1]
+	nw_5_only$rr <- resid(nw5_t, type = "response")
+	nw_5_only$rp <- resid(nw5_t, type = "pearson")[,1]
+	par(mfcol = c(2, 3))
+	with(nw_5_only, {
+	    plot(yhat, rr, main = "Fitted vs Residuals")
+	    qqnorm(rr)
+	    plot(yhat, rp, main = "Fitted vs Pearson Residuals")
+	    qqnorm(rp)
+	    plot(Pair_Size, rp, main = "Actual vs Pearson Residuals")
+	    plot(Pair_Size, yhat, main = "Actual vs Fitted")
+	})
+	r <- with(nw_5_only, cor(yhat, Pair_Size)) 
+	r 
+	r^2 #0.1864142
+	summary(qn5_t <- vglm(Pair_Size ~ SES + Set_Size, tobit(Lower=0, Upper = 1), data = qn_5_only))
+	summary(qn5_t_ref <- vglm(Pair_Size ~ SES + Set_Size_refM, tobit(Lower=0, Upper = 1), data = qn_5_only))
+	#Checking model fit for 5 yo QN
+	qn_5_only$yhat <- fitted(qn5_t)[,1]
+	qn_5_only$rr <- resid(qn5_t, type = "response")
+	qn_5_only$rp <- resid(qn5_t, type = "pearson")[,1]
+	par(mfcol = c(2, 3))
+	with(qn_5_only, {
+	    plot(yhat, rr, main = "Fitted vs Residuals")
+	    qqnorm(rr)
+	    plot(yhat, rp, main = "Fitted vs Pearson Residuals")
+	    qqnorm(rp)
+	    plot(Pair_Size, rp, main = "Actual vs Pearson Residuals")
+	    plot(Pair_Size, yhat, main = "Actual vs Fitted")
+	})
+	r <- with(qn_5_only, cor(yhat, Pair_Size)) 
+	r 
+	r^2 #0.3219129
+	summary(qw5_t <- vglm(Pair_Size ~ SES + Set_Size, tobit(Lower=0, Upper = 1), data = qw_5_only))
+	summary(qw5_t_ref <- vglm(Pair_Size ~ SES + Set_Size_refM, tobit(Lower=0, Upper = 1), data = qw_5_only))
+	#Checking model fit for 5 yo QW
+	qw_5_only$yhat <- fitted(qw5_t)[,1]
+	qw_5_only$rr <- resid(qw5_t, type = "response")
+	qw_5_only$rp <- resid(qw5_t, type = "pearson")[,1]
+	par(mfcol = c(2, 3))
+	with(qw_5_only, {
+	    plot(yhat, rr, main = "Fitted vs Residuals")
+	    qqnorm(rr)
+	    plot(yhat, rp, main = "Fitted vs Pearson Residuals")
+	    qqnorm(rp)
+	    plot(Pair_Size, rp, main = "Actual vs Pearson Residuals")
+	    plot(Pair_Size, yhat, main = "Actual vs Fitted")
+	})
+	r <- with(qw_5_only, cor(yhat, Pair_Size))
+	r 
+	r^2 #0.2223241
+	
+#6-year-olds only
+	Map6 <- subset(HBE_short2_5, HBE_short2_5$AgeGrp == "6-year-olds")
+	View(Map6)
+	summary(Map6_t <- vglm(Pair_Size ~  SES + MapPair, tobit(Upper = 1), data = Map6))
+	summary(Map6_t_ref <- vglm(Pair_Size ~ SES + MapPair_refQW, tobit(Upper = 1), data = Map6))
+	#Checking model fit for 6 yo 
+	Map6$yhat <- fitted(Map6_t)[,1]
+	Map6$rr <- resid(Map6_t, type = "response")
+	Map6$rp <- resid(Map6_t, type = "pearson")[,1]
+	par(mfcol = c(2, 3))
+	with(Map6, {
+	    plot(yhat, rr, main = "Fitted vs Residuals")
+	    qqnorm(rr)
+	    plot(yhat, rp, main = "Fitted vs Pearson Residuals")
+	    qqnorm(rp)
+	    plot(Pair_Size, rp, main = "Actual vs Pearson Residuals")
+	    plot(Pair_Size, yhat, main = "Actual vs Fitted")
+	})
+	r <- with(Map6, cor(yhat, Pair_Size)) 
+	r 
+	r^2 #0.1720359
+	#6 YO, Looking at Map Pairs	
+	summary(nw6_t <- vglm(Pair_Size ~ SES + Set_Size, tobit(Lower=0, Upper = 1), data = nw_6_only)) #DOES NOT RUN, @ CEILING
+	summary(qn6_t <- vglm(Pair_Size ~ SES + Set_Size, tobit(Lower=0, Upper = 1), data = qn_6_only))
+	summary(qn6_t_ref <- vglm(Pair_Size ~ SES + Set_Size_refM, tobit(Lower=0, Upper = 1), data = qn_6_only))
+	#Checking model fit for 6 yo QN
+	qn_6_only$yhat <- fitted(qn6_t)[,1]
+	qn_6_only$rr <- resid(qn6_t, type = "response")
+	qn_6_only$rp <- resid(qn6_t, type = "pearson")[,1]
+	par(mfcol = c(2, 3))
+	with(qn_6_only, {
+	    plot(yhat, rr, main = "Fitted vs Residuals")
+	    qqnorm(rr)
+	    plot(yhat, rp, main = "Fitted vs Pearson Residuals")
+	    qqnorm(rp)
+	    plot(Pair_Size, rp, main = "Actual vs Pearson Residuals")
+	    plot(Pair_Size, yhat, main = "Actual vs Fitted")
+	})
+	r <- with(qn_6_only, cor(yhat, Pair_Size)) 
+	r 
+	r^2 #0.2349921
+	summary(qw6_t <- vglm(Pair_Size ~ SES + Set_Size, tobit(Lower=0, Upper = 1), data = qw_6_only))
+	summary(qw6_t_ref <- vglm(Pair_Size ~ SES + Set_Size_refM, tobit(Lower=0, Upper = 1), data = qw_6_only))
+	#Checking model fit for 6 YO QW
+	qw_6_only$yhat <- fitted(qw6_t)[,1]
+	qw_6_only$rr <- resid(qw6_t, type = "response")
+	qw_6_only$rp <- resid(qw6_t, type = "pearson")[,1]
+	par(mfcol = c(2, 3))
+	with(qw_6_only, {
+	    plot(yhat, rr, main = "Fitted vs Residuals")
+	    qqnorm(rr)
+	    plot(yhat, rp, main = "Fitted vs Pearson Residuals")
+	    qqnorm(rp)
+	    plot(Pair_Size, rp, main = "Actual vs Pearson Residuals")
+	    plot(Pair_Size, yhat, main = "Actual vs Fitted")
+	})
+	r <- with(qw_6_only, cor(yhat, Pair_Size)) 
+	r 
+	r^2 #0.2215429
+
+#7-9 year olds
+	summary(agegrp79 <- vglm(Pair_Size ~ SES + MapPair, tobit(Lower=0, Upper = 1), data = HBE_short2_7)) 
+	summary(agegrp79_ref <- vglm(Pair_Size ~ SES + MapPair_refQW, tobit(Lower=0, Upper = 1), data = HBE_short2_7)) 
+	#Checking model fit for 7-9 yo 
+	HBE_short2_7$yhat <- fitted(agegrp79)[,1]
+	HBE_short2_7$rr <- resid(agegrp79, type = "response")
+	HBE_short2_7$rp <- resid(agegrp79, type = "pearson")[,1]
+	par(mfcol = c(2, 3))
+	with(HBE_short2_7, {
+	    plot(yhat, rr, main = "Fitted vs Residuals")
+	    qqnorm(rr)
+	    plot(yhat, rp, main = "Fitted vs Pearson Residuals")
+	    qqnorm(rp)
+	    plot(Pair_Size, rp, main = "Actual vs Pearson Residuals")
+	    plot(Pair_Size, yhat, main = "Actual vs Fitted")
+	})
+	r <- with(HBE_short2_7, cor(yhat, Pair_Size))
+	r 
+	r^2 #0.1304551
+	#7-9 YO, MAPPING PAIRS
+	summary(nw7_t <- vglm(Pair_Size ~ SES + Set_Size, tobit(Lower=0, Upper = 1), data = nw_7)) 
+	summary(nw7_t_ref <- vglm(Pair_Size ~ SES + Set_Size_refM, tobit(Lower=0, Upper = 1), data = nw_7)) 
+	nw_7$yhat <- fitted(nw7_t)[,1]
+	nw_7$rr <- resid(nw7_t, type = "response")
+	nw_7$rp <- resid(nw7_t, type = "pearson")[,1]
+	par(mfcol = c(2, 3))
+	with(nw_7, {
+	    plot(yhat, rr, main = "Fitted vs Residuals")
+	    qqnorm(rr)
+	    plot(yhat, rp, main = "Fitted vs Pearson Residuals")
+	    qqnorm(rp)
+	    plot(Pair_Size, rp, main = "Actual vs Pearson Residuals")
+	    plot(Pair_Size, yhat, main = "Actual vs Fitted")
+	})
+	r <- with(nw_7, cor(yhat, Pair_Size)) 
+	r 
+	r^2 #0.3534858
+	summary(qn7_t <- vglm(Pair_Size ~ SES + Set_Size, tobit(Lower=0, Upper = 1), data = qn_7)) 
+	summary(qn7_t_ref <- vglm(Pair_Size ~ SES + Set_Size_refM, tobit(Lower=0, Upper = 1), data = qn_7))
+	qn_7$yhat <- fitted(qn7_t)[,1]
+	qn_7$rr <- resid(qn7_t, type = "response")
+	qn_7$rp <- resid(qn7_t, type = "pearson")[,1]
+	par(mfcol = c(2, 3))
+	with(qn_7, {
+	    plot(yhat, rr, main = "Fitted vs Residuals")
+	    qqnorm(rr)
+	    plot(yhat, rp, main = "Fitted vs Pearson Residuals")
+	    qqnorm(rp)
+	    plot(Pair_Size, rp, main = "Actual vs Pearson Residuals")
+	    plot(Pair_Size, yhat, main = "Actual vs Fitted")
+	})
+	r <- with(qn_7, cor(yhat, Pair_Size)) 
+	r 
+	r^2 #0.06297179
+	summary(qw7_t <- vglm(Pair_Size ~ SES + Set_Size, tobit(Lower=0, Upper = 1), data = qw_7)) 
+	summary(qw7_t_ref <- vglm(Pair_Size ~ SES + Set_Size_refM, tobit(Lower=0, Upper = 1), data = qw_7)) 
+	qw_7$yhat <- fitted(qw7_t)[,1]
+	qw_7$rr <- resid(qw7_t, type = "response")
+	qw_7$rp <- resid(qw7_t, type = "pearson")[,1]
+	par(mfcol = c(2, 3))
+	with(qw_7, {
+	    plot(yhat, rr, main = "Fitted vs Residuals")
+	    qqnorm(rr)
+	    plot(yhat, rp, main = "Fitted vs Pearson Residuals")
+	    qqnorm(rp)
+	    plot(Pair_Size, rp, main = "Actual vs Pearson Residuals")
+	    plot(Pair_Size, yhat, main = "Actual vs Fitted")
+	})
+	r <- with(qw_7, cor(yhat, Pair_Size)) 
+	r 
+	r^2 #0.1676238
+	
+#SUPPLEMENTARY MATERIALS
+#Creating model figures for supplementary materials
+	#Resource: https://strengejacke.github.io/sjPlot/articles/tab_model_estimates.html
+	install.packages("sjPlot")
+	install.packages("sjmisc")
+	install.packages("sjlabelled")
+	library(sjPlot)
+	library(sjmisc)
+	library(sjlabelled)
+
+	#Figure with 3 Age x Map Pair Models, reference = Small
+	tab_model(Map5_t, Map6_t, agegrp79, auto.label = FALSE, show.ci = FALSE) #TO CHECK VARIABLE NAMES TO ENSURE RENAMING ACCURATELY
+	tab_model(Map5_t, Map6_t, agegrp79, auto.label = FALSE, show.ci = FALSE, show.se = TRUE, show.stat = TRUE, show.est = TRUE, pred.labels = c("Intercept 1", "Intercept 2", "SES", "Quantity-Numeral", "Quantity-Word"), dv.labels = c("5-year-olds", "6-year-olds", "7 to 9-year-olds"), string.p = "P-Values", string.se = "Standard Errors", string.stat = "t-statistics")	
+	#Figure with 3 Age x Map Pair Models, reference = Medium
+	tab_model(Map5_t_ref, Map6_t_ref, agegrp79_ref, auto.label = FALSE, show.ci = FALSE) #TO CHECK VARIABLE NAMES TO ENSURE RENAMING ACCURATELY
+	tab_model(Map5_t_ref, Map6_t_ref, agegrp79_ref, auto.label = FALSE, show.ci = FALSE, show.se = TRUE, show.stat = TRUE, show.est = TRUE, pred.labels = c("Intercept 1", "Intercept 2", "SES", "Numeral-Word", "Quantity-Numeral"), dv.labels = c("5-year-olds", "6-year-olds", "7 to 9-year-olds"), string.p = "P-Values", string.se = "Standard Errors", string.stat = "t-statistics")
+
+	#Figure with 5-year-olds Mapping Pair x Set Size, reference = Small
+	tab_model(qn5_t, qw5_t, nw5_t, auto.label = FALSE, show.ci = FALSE) #TO CHECK VARIABLE NAMES TO ENSURE RENAMING ACCURATELY
+	tab_model(qn5_t, qw5_t, nw5_t, auto.label = FALSE, show.ci = FALSE, show.se = TRUE, show.stat = TRUE, show.est = TRUE, pred.labels = c("Intercept 1", "Intercept 2", "SES", "Medium", "Large"), dv.labels = c("Quantity-Numeral", "Quantity-Word", "Numeral-Word"), string.p = "P-Values", string.se = "Standard Errors", string.stat = "t-statistics")
+	#Figure with 5-year-olds Mapping Pair x Set Size, reference = Medium
+	tab_model(qn5_t_ref, qw5_t_ref, nw5_t_ref, auto.label = FALSE, show.ci = FALSE) #TO CHECK VARIABLE NAMES TO ENSURE RENAMING ACCURATELY
+	tab_model(qn5_t_ref, qw5_t_ref, nw5_t_ref, auto.label = FALSE, show.ci = FALSE, show.se = TRUE, show.stat = TRUE, show.est = TRUE, pred.labels = c("Intercept 1", "Intercept 2", "SES", "Small", "Large"), dv.labels = c("Quantity-Numeral", "Quantity-Word", "Numeral-Word"), string.p = "P-Values", string.se = "Standard Errors", string.stat = "t-statistics")
+	
+	#Figure with 6-year-olds Mapping Pair x Set Size, Reference= Small (Numeral-Word does not run)
+	tab_model(qn6_t,  qw6_t, auto.label = FALSE, show.ci = FALSE) #TO CHECK VARIABLE NAMES TO ENSURE RENAMING ACCURATELY
+	tab_model(qn6_t,  qw6_t, auto.label = FALSE, show.ci = FALSE, show.se = TRUE, show.stat = TRUE, show.est = TRUE, pred.labels = c("Intercept 1", "Intercept 2", "SES", "Medium", "Large"), dv.labels = c("Quantity-Numeral", "Quantity-Word"), string.p = "P-Values", string.se = "Standard Errors", string.stat = "t-statistics")
+	#Figure with 6-year-olds Mapping Pair x Set Size, Reference= Medium (Numeral-Word does not run)
+	tab_model(qn6_t_ref, qw6_t_ref, auto.label = FALSE, show.ci = FALSE) #TO CHECK VARIABLE NAMES TO ENSURE RENAMING ACCURATELY
+	tab_model(qn6_t_ref, qw6_t_ref, auto.label = FALSE, show.ci = FALSE, show.se = TRUE, show.stat = TRUE, show.est = TRUE, pred.labels = c("Intercept 1", "Intercept 2", "SES", "Small", "Large"), dv.labels = c("Quantity-Numeral", "Quantity-Word"), string.p = "P-Values", string.se = "Standard Errors", string.stat = "t-statistics")
+	
+	#Figure with 7-9 year-olds Mapping Pair x Set Size, Reference= Small 
+	tab_model(qn7_t, qw7_t, nw7_t, auto.label = FALSE, show.ci = FALSE) #TO CHECK VARIABLE NAMES TO ENSURE RENAMING ACCURATELY
+	tab_model(qn7_t, qw7_t, nw7_t, auto.label = FALSE, show.ci = FALSE, show.se = TRUE, show.stat = TRUE, show.est = TRUE, pred.labels = c("Intercept 1", "Intercept 2", "SES", "Medium", "Large"), dv.labels = c("Quantity-Numeral", "Quantity-Word", "Numeral-Word"), string.p = "P-Values", string.se = "Standard Errors", string.stat = "t-statistics")
+	#Figure with 7-9 year-olds Mapping Pair x Set Size, Reference= Medium
+	tab_model(qn7_t_ref, qw7_t_ref, nw7_t_ref, auto.label = FALSE, show.ci = FALSE) #TO CHECK VARIABLE NAMES TO ENSURE RENAMING ACCURATELY
+	tab_model(qn7_t_ref, qw7_t_ref, nw7_t_ref, auto.label = FALSE, show.ci = FALSE, show.se = TRUE, show.stat = TRUE, show.est = TRUE, pred.labels = c("Intercept 1", "Intercept 2", "SES", "Small", "Large"), dv.labels = c("Quantity-Numeral", "Quantity-Word", "Numeral-Word"), string.p = "P-Values", string.se = "Standard Errors", string.stat = "t-statistics")
